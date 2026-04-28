@@ -35,6 +35,7 @@ import type { NumericValue } from '../numeric-value/types';
 import type { SmallInteger } from '../numerics/types';
 
 import { toAsciiMath } from './ascii-math';
+import { serialize as serializeSympy } from '../../math-json/serialize-sympy';
 // Dynamic import for serializeJson to avoid circular dependency
 import { cmp, eq, same } from './compare';
 import { CancellationError } from '../../common/interruptible';
@@ -263,6 +264,18 @@ export abstract class _BoxedExpression implements Expression {
       return syntax.serialize(json);
 
     return syntax.serialize(json, options);
+  }
+
+  /**
+   * Return a SymPy-compatible source string for this expression.
+   * Output is a Python expression accepted by `sympy.sympify()`.
+   */
+  get sympy(): string {
+    if (this.isLazyCollection) {
+      const materialized = this.evaluate({ materialization: true });
+      if (!materialized.isLazyCollection) return materialized.sympy;
+    }
+    return serializeSympy(this.json);
   }
 
   /** Called by `JSON.stringify()` when serializing to json.

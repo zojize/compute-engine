@@ -17,6 +17,9 @@ export {
   serialize as serializeLatex,
 } from './compute-engine/latex-syntax/latex-syntax';
 
+// ── SymPy serialization ─────────────────────────────────────────────
+export { serialize as serializeSympy } from './math-json/serialize-sympy';
+
 // ── Wire up LatexSyntax so all ComputeEngine instances can lazily create one ──
 ComputeEngine._latexSyntaxFactory = () => new LatexSyntax();
 

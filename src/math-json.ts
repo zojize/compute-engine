@@ -29,4 +29,6 @@ export {
   dictionaryFromExpression,
 } from './math-json/utils';
 
+export { serialize as serializeSympy } from './math-json/serialize-sympy';
+
 export const version = '{{SDK_VERSION}}';

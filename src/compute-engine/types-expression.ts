@@ -678,6 +678,17 @@ export interface Expression {
   toLatex(options?: Record<string, any>): string;
 
   /**
+   * Return a SymPy-compatible source-string representation of this
+   * expression.
+   *
+   * The output is a Python expression accepted by `sympy.sympify()`,
+   * for example `Rational(1, 2) + sin(x)`. This is a convenience getter
+   * that delegates to the standalone `serialize()` function from the
+   * `math-json/serialize-sympy` module and is invoked against `this.json`.
+   */
+  readonly sympy: string;
+
+  /**
    * Output to the console a string representation of the expression.
    *
    * Note that lazy collections are eagerly evaluated when printed.
