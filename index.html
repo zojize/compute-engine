@@ -78,7 +78,9 @@
       <p class="sub">
         Powered by <code>sourceOffsets</code> on Compute Engine parser errors +
         <code>MathfieldElement.applyStyle()</code>. Type an invalid expression — the exact
-        offending token is colored <span style="color: var(--error); font-weight: 700">red</span>.
+        offending token is colored <span style="color: var(--error); font-weight: 700">red</span>,
+        and a <strong>missing value</strong> (empty <code>\sqrt</code> / <code>\frac</code> slot) is
+        flagged with a red placeholder box.
       </p>
 
       <div class="card">
@@ -179,20 +181,33 @@
       const styleOpts = (range) => ({ range, operation: 'set', silenceNotifications: true });
 
       function refresh() {
-        // Clear previous highlights
+        // Clear previous highlights (token colors + placeholder backgrounds)
         for (const r of applied) mf.applyStyle({ color: 'none' }, styleOpts(r));
         applied = [];
+        if (mf.lastOffset > 0) mf.applyStyle({ backgroundColor: 'none' }, styleOpts([0, mf.lastOffset]));
 
         const latex = mf.getValue('latex-unstyled');
         const json = ls.parse(latex);
         const errors = collectErrorOffsets(json);
 
-        // Apply new highlights
-        for (const { offsets: [start, end] } of errors) {
+        let hasMissing = false;
+        for (const { offsets: [start, end], code } of errors) {
+          // Missing values are zero-width (no token to color) — handled below.
+          if (code === 'missing' || end <= start) { hasMissing = true; continue; }
           const range = offsetsToRange(start, end);
           if (!range) continue;
           mf.applyStyle({ color: ERROR_COLOR }, styleOpts(range));
           applied.push(range);
+        }
+
+        // A missing value renders as an empty placeholder (▢). Paint each empty
+        // placeholder slot as a red rect with a background style.
+        if (hasMissing) {
+          for (let o = 0; o < mf.lastOffset; o++) {
+            if (mf.getValue(o, o + 1, 'latex-unstyled') === '\\placeholder{}') {
+              mf.applyStyle({ backgroundColor: ERROR_COLOR }, styleOpts([o, o + 1]));
+            }
+          }
         }
 
         render(latex, json, errors);
@@ -216,17 +231,29 @@
       mf.addEventListener('input', refresh);
       customElements.whenDefined('math-field').then(() => setTimeout(refresh, 0));
 
-      // Example chips
-      const EXAMPLES = ['\\foo', '1+', '(x+1', 'x @', '\\sqrt{}', '\\frac{}{}', '\\frac{1}{}', '\\frac{1}{2}@', '2x+3'];
+      // Example chips. Empty constructs insert the placeholder form a real
+      // editor produces (typing `/` yields `\frac{\placeholder{}}{…}`), so the
+      // missing slots render as ▢ and get painted red.
+      const EXAMPLES = [
+        { label: '\\foo', latex: '\\foo' },
+        { label: '1+', latex: '1+' },
+        { label: '(x+1', latex: '(x+1' },
+        { label: 'x @', latex: 'x @' },
+        { label: '\\sqrt{}', latex: '\\sqrt{\\placeholder{}}' },
+        { label: '\\frac{}{}', latex: '\\frac{\\placeholder{}}{\\placeholder{}}' },
+        { label: '\\frac{1}{}', latex: '\\frac{1}{\\placeholder{}}' },
+        { label: '\\frac{1}{2}@', latex: '\\frac{1}{2}@' },
+        { label: '2x+3', latex: '2x+3' },
+      ];
       const box = document.getElementById('examples');
-      for (const ex of EXAMPLES) {
+      for (const { label, latex } of EXAMPLES) {
         const b = document.createElement('button');
-        b.textContent = ex;
+        b.textContent = label;
         b.onclick = () => {
           mf.focus();
           mf.executeCommand('selectAll');
           mf.executeCommand('deleteBackward');
-          mf.executeCommand(['insert', ex]);
+          mf.executeCommand(['insert', latex]);
           refresh();
         };
         box.appendChild(b);
