@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LaTeX parse-error highlighting — Compute Engine sourceOffsets</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mathlive@0.109.2/mathlive-fonts.css" />
+    <style>
+      :root {
+        --bg: #0d1117;
+        --panel: #161b22;
+        --border: #30363d;
+        --text: #e6edf3;
+        --muted: #9da7b3;
+        --accent: #58a6ff;
+        --error: #dc3545;
+        --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.55;
+      }
+      .wrap { max-width: 860px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+      h1 { font-size: 1.7rem; margin: 0 0 .35rem; }
+      .sub { color: var(--muted); margin: 0 0 2rem; }
+      a { color: var(--accent); }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1.25rem;
+      }
+      label.field-label { display: block; font-weight: 600; margin-bottom: .5rem; }
+      math-field {
+        width: 100%;
+        font-size: 1.6rem;
+        padding: .6rem .75rem;
+        background: #fff;
+        color: #111;
+        border: 2px solid var(--border);
+        border-radius: 8px;
+      }
+      math-field.is-invalid { border-color: var(--error); }
+      .status { margin-top: .75rem; min-height: 1.4em; font-weight: 600; }
+      .status.ok { color: #3fb950; }
+      .status.err { color: var(--error); }
+      .examples { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+      .examples button {
+        font: inherit; font-family: var(--mono); font-size: .85rem;
+        background: #21262d; color: var(--text);
+        border: 1px solid var(--border); border-radius: 6px;
+        padding: .35rem .6rem; cursor: pointer;
+      }
+      .examples button:hover { border-color: var(--accent); }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+      @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+      h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 .5rem; }
+      pre {
+        font-family: var(--mono); font-size: .82rem;
+        background: #0d1117; border: 1px solid var(--border); border-radius: 8px;
+        padding: .75rem; overflow: auto; margin: 0; max-height: 230px;
+        white-space: pre-wrap; word-break: break-word;
+      }
+      .off { color: var(--error); font-weight: 700; }
+      code { font-family: var(--mono); background: #21262d; padding: .1em .35em; border-radius: 4px; }
+      .note { color: var(--muted); font-size: .9rem; }
+      footer { color: var(--muted); font-size: .85rem; margin-top: 2rem; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Inline LaTeX parse-error highlighting</h1>
+      <p class="sub">
+        Powered by <code>sourceOffsets</code> on Compute Engine parser errors +
+        <code>MathfieldElement.applyStyle()</code>. Type an invalid expression — the exact
+        offending token is colored <span style="color: var(--error); font-weight: 700">red</span>.
+      </p>
+
+      <div class="card">
+        <label class="field-label" for="mf">Math input</label>
+        <math-field id="mf">x^2 + 3x</math-field>
+        <div id="status" class="status"></div>
+        <div class="examples" id="examples"></div>
+      </div>
+
+      <div class="card">
+        <div class="grid">
+          <div>
+            <h3>Compute Engine MathJSON</h3>
+            <pre id="json"></pre>
+          </div>
+          <div>
+            <h3>Detected error offsets</h3>
+            <pre id="offsets"></pre>
+          </div>
+        </div>
+        <p class="note" style="margin-top: 1rem">
+          Offsets are character ranges into the serialized LaTeX. The highlighter maps each
+          range to a Mathfield selection and styles it — no PrairieLearn-specific code involved.
+        </p>
+      </div>
+
+      <footer>
+        Compute Engine fork: <a href="https://github.com/zojize/compute-engine/tree/codex/latex-error-source-offsets">zojize/compute-engine</a>
+        · feature: <code>sourceOffsets</code> on parser <code>Error</code> nodes.
+      </footer>
+    </div>
+
+    <script type="module">
+      import { MathfieldElement } from 'https://esm.run/mathlive@0.109.2';
+      import { LatexSyntax } from './compute-engine.min.esm.js';
+
+      // Fonts are provided by the <link> to mathlive-fonts.css in <head>;
+      // disable MathLive's own loader (its CDN auto-path double-slashes).
+      MathfieldElement.fontsDirectory = null;
+      MathfieldElement.soundsDirectory = null;
+
+      const ERROR_COLOR = '#dc3545';
+      const ls = new LatexSyntax();
+
+      const mf = document.getElementById('mf');
+      const statusEl = document.getElementById('status');
+      const jsonEl = document.getElementById('json');
+      const offsetsEl = document.getElementById('offsets');
+
+      // ──────────────────────────────────────────────────────────────────────
+      // The whole feature: read sourceOffsets off Error nodes, map to a
+      // Mathfield range, paint it. ~40 lines, no framework.
+      // ──────────────────────────────────────────────────────────────────────
+
+      /** A valid [start, end] source-offset tuple? */
+      const isOffset = (v) =>
+        Array.isArray(v) && v.length === 2 &&
+        Number.isInteger(v[0]) && Number.isInteger(v[1]) &&
+        v[0] >= 0 && v[1] >= v[0];
+
+      /** Recursively collect sourceOffsets from parser-generated Error nodes. */
+      function collectErrorOffsets(expr) {
+        if (Array.isArray(expr)) return expr.slice(1).flatMap(collectErrorOffsets);
+        if (!expr || typeof expr !== 'object') return [];
+        const fn = expr.fn;
+        if (Array.isArray(fn) && fn[0] === 'Error' && isOffset(expr.sourceOffsets)) {
+          return [{ offsets: expr.sourceOffsets, code: errorCode(fn) }];
+        }
+        return fn ? collectErrorOffsets(fn) : [];
+      }
+
+      function errorCode(fn) {
+        const c = fn[1];
+        if (typeof c === 'string') return c.replace(/^'|'$/g, '');
+        if (c && typeof c === 'object' && 'str' in c) return c.str;
+        return 'error';
+      }
+
+      /** Map a LaTeX character offset to a Mathfield position. */
+      function latexOffsetToFieldOffset(target) {
+        for (let o = 0; o <= mf.lastOffset; o++) {
+          if (mf.getValue(0, o, 'latex-unstyled').length >= target) return o;
+        }
+        return null;
+      }
+
+      /** Turn a [start, end] LaTeX range into a non-empty Mathfield range. */
+      function offsetsToRange(start, end) {
+        const s = latexOffsetToFieldOffset(start);
+        const e = latexOffsetToFieldOffset(end);
+        if (s === null || e === null) return mf.lastOffset > 0 ? [0, mf.lastOffset] : null;
+        if (e <= s) return null; // zero-width (e.g. empty \sqrt{}) — nothing to paint
+        return [s, e];
+      }
+
+      let applied = [];
+      const styleOpts = (range) => ({ range, operation: 'set', silenceNotifications: true });
+
+      function refresh() {
+        // Clear previous highlights
+        for (const r of applied) mf.applyStyle({ color: 'none' }, styleOpts(r));
+        applied = [];
+
+        const latex = mf.getValue('latex-unstyled');
+        const json = ls.parse(latex);
+        const errors = collectErrorOffsets(json);
+
+        // Apply new highlights
+        for (const { offsets: [start, end] } of errors) {
+          const range = offsetsToRange(start, end);
+          if (!range) continue;
+          mf.applyStyle({ color: ERROR_COLOR }, styleOpts(range));
+          applied.push(range);
+        }
+
+        render(latex, json, errors);
+      }
+
+      function render(latex, json, errors) {
+        mf.classList.toggle('is-invalid', errors.length > 0);
+        if (errors.length === 0) {
+          statusEl.textContent = latex.trim() ? '✓ Valid expression' : '';
+          statusEl.className = 'status ok';
+        } else {
+          statusEl.textContent = '✕ ' + errors.map((e) => e.code).join(', ');
+          statusEl.className = 'status err';
+        }
+        jsonEl.textContent = JSON.stringify(json, null, 2);
+        offsetsEl.textContent = errors.length
+          ? errors.map((e) => `${e.code}  →  [${e.offsets[0]}, ${e.offsets[1]}]  "${latex.slice(e.offsets[0], e.offsets[1])}"`).join('\n')
+          : '(none)';
+      }
+
+      mf.addEventListener('input', refresh);
+      customElements.whenDefined('math-field').then(() => setTimeout(refresh, 0));
+
+      // Example chips
+      const EXAMPLES = ['\\foo', '1+', '(x+1', 'x @', '\\sqrt{}', '\\frac{}{}', '\\frac{1}{}', '\\frac{1}{2}@', '2x+3'];
+      const box = document.getElementById('examples');
+      for (const ex of EXAMPLES) {
+        const b = document.createElement('button');
+        b.textContent = ex;
+        b.onclick = () => {
+          mf.focus();
+          mf.executeCommand('selectAll');
+          mf.executeCommand('deleteBackward');
+          mf.executeCommand(['insert', ex]);
+          refresh();
+        };
+        box.appendChild(b);
+      }
+    </script>
+  </body>
+</html>
