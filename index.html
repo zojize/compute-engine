@@ -7,12 +7,15 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mathlive@0.109.2/mathlive-fonts.css" />
     <style>
       :root {
-        --bg: #0d1117;
-        --panel: #161b22;
-        --border: #30363d;
-        --text: #e6edf3;
-        --muted: #9da7b3;
-        --accent: #58a6ff;
+        color-scheme: light;
+        --bg: #ffffff;
+        --panel: #f6f8fa;
+        --code-bg: #eff1f3;
+        --border: #d0d7de;
+        --text: #1f2328;
+        --muted: #656d76;
+        --accent: #0969da;
+        --ok: #1a7f37;
         --error: #dc3545;
         --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
       }
@@ -47,12 +50,12 @@
       }
       math-field.is-invalid { border-color: var(--error); }
       .status { margin-top: .75rem; min-height: 1.4em; font-weight: 600; }
-      .status.ok { color: #3fb950; }
+      .status.ok { color: var(--ok); }
       .status.err { color: var(--error); }
       .examples { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
       .examples button {
         font: inherit; font-family: var(--mono); font-size: .85rem;
-        background: #21262d; color: var(--text);
+        background: #fff; color: var(--text);
         border: 1px solid var(--border); border-radius: 6px;
         padding: .35rem .6rem; cursor: pointer;
       }
@@ -62,12 +65,12 @@
       h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 .5rem; }
       pre {
         font-family: var(--mono); font-size: .82rem;
-        background: #0d1117; border: 1px solid var(--border); border-radius: 8px;
+        background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
         padding: .75rem; overflow: auto; margin: 0; max-height: 230px;
         white-space: pre-wrap; word-break: break-word;
       }
       .off { color: var(--error); font-weight: 700; }
-      code { font-family: var(--mono); background: #21262d; padding: .1em .35em; border-radius: 4px; }
+      code { font-family: var(--mono); background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
       .note { color: var(--muted); font-size: .9rem; }
       footer { color: var(--muted); font-size: .85rem; margin-top: 2rem; }
     </style>
