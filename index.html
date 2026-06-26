@@ -151,7 +151,8 @@
       }
 
       function errorCode(fn) {
-        const c = fn[1];
+        let c = fn[1];
+        if (Array.isArray(c) && c[0] === 'ErrorCode') c = c[1]; // unwrap ["ErrorCode", {str}, …]
         if (typeof c === 'string') return c.replace(/^'|'$/g, '');
         if (c && typeof c === 'object' && 'str' in c) return c.str;
         return 'error';
